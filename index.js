@@ -44,7 +44,11 @@ async function main() {
 
             const lastOpeationTime = rateLimitingMap.get(socket.id);
             if(lastOpeationTime){
-
+                const timeElapsed = Date.now() - lastOpeationTime;
+                if( timeElapsed < 5.5 * 1000){
+                    socket.emit('server:error', {error: 'Please wait'})
+                    return
+                }
             } else{
                 rateLimitingMap.set(socket.id, Date.now());
             }
