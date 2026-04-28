@@ -168,6 +168,9 @@
         const container = document.getElementById('container')
         const CHECKBOX_COUNT = 100
 
+        scoket.on('server:error', (data)=>{
+            const errorMessage = data.error;
+        })
         scoket.on('server:checkbox:change', (data)=>{
             console.log(`Socket server Event`, data);
             const {index , checked } = data;
