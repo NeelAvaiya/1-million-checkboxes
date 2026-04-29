@@ -7,11 +7,9 @@ import { Server } from 'socket.io';
 import { publisher, redis, subscriber } from './redis-connection.js';
 
 const CHECKBOX_SIZE = 100;
-const CHECKBOX_STATE_KEY = 'checkbox-state';
+const CHECKBOX_STATE_KEY = 'checkbox-state:v1';
 
 const rateLimitingMap = new Map();
-
-
 
 async function getCheckboxState() {
     const existingState = await redis.get(CHECKBOX_STATE_KEY);
@@ -37,21 +35,21 @@ async function main() {
 
     //Socket IO Handler
     io.on('connection', (socket) => {
+        //OIDC Authentication can be implemented here // user.sub?
         console.log(`Socket connected`, {id: socket.id});
 
         socket.on('client:checkbox:change', async (data) =>{
             console.log(`[Socket:${socket.id}]:client:checkbox:change`, data);
 
-            const lastOpeationTime = rateLimitingMap.get(socket.id);
-            if(lastOpeationTime){
-                const timeElapsed = Date.now() - lastOpeationTime;
+            const lastOperationTime = await redis.get(`rate-limit:${socket.id}`);
+            if(lastOperationTime){
+                const timeElapsed = Date.now() - parseInt(lastOperationTime);
                 if( timeElapsed < 5.5 * 1000){
                     socket.emit('server:error', {error: 'Please wait'})
                     return
                 }
-            } else{
-                rateLimitingMap.set(socket.id, Date.now());
             }
+            await redis.set(`rate-limit:${socket.id}`, Date.now().toString());
 
             const checkboxes = await getCheckboxState();
             checkboxes[data.index] = data.checked;

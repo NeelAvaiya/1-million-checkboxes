@@ -144,6 +144,134 @@
             color: #475569;
         }
 
+        /* Toast Notification */
+        .toast-container {
+            position: fixed;
+            top: 1.5rem;
+            right: 1.5rem;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            pointer-events: none;
+        }
+
+        .toast {
+            pointer-events: auto;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            min-width: 320px;
+            max-width: 420px;
+            padding: 1rem 1.25rem;
+            background: rgba(30, 20, 40, 0.92);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(248, 113, 113, 0.25);
+            border-left: 4px solid #f87171;
+            border-radius: 12px;
+            box-shadow:
+                0 8px 32px rgba(0, 0, 0, 0.4),
+                0 0 20px rgba(248, 113, 113, 0.1);
+            color: #fecaca;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            animation: toast-slide-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .toast.toast-exit {
+            animation: toast-slide-out 0.35s cubic-bezier(0.4, 0, 1, 1) forwards;
+        }
+
+        .toast-icon {
+            flex-shrink: 0;
+            width: 22px;
+            height: 22px;
+            background: rgba(248, 113, 113, 0.15);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            margin-top: 1px;
+        }
+
+        .toast-body {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+        }
+
+        .toast-title {
+            font-weight: 600;
+            color: #f87171;
+            font-size: 0.85rem;
+            letter-spacing: 0.02em;
+        }
+
+        .toast-message {
+            color: #e2e0e8;
+            word-break: break-word;
+        }
+
+        .toast-close {
+            flex-shrink: 0;
+            background: none;
+            border: none;
+            color: #94a3b8;
+            cursor: pointer;
+            font-size: 1.1rem;
+            padding: 2px 4px;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+            line-height: 1;
+        }
+
+        .toast-close:hover {
+            color: #f87171;
+            background: rgba(248, 113, 113, 0.1);
+        }
+
+        .toast-progress {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #f87171, #fb923c);
+            border-radius: 0 0 0 12px;
+            animation: toast-progress 5s linear forwards;
+        }
+
+        @keyframes toast-slide-in {
+            from {
+                opacity: 0;
+                transform: translateX(100%) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0) scale(1);
+            }
+        }
+
+        @keyframes toast-slide-out {
+            from {
+                opacity: 1;
+                transform: translateX(0) scale(1);
+            }
+            to {
+                opacity: 0;
+                transform: translateX(100%) scale(0.95);
+            }
+        }
+
+        @keyframes toast-progress {
+            from { width: 100%; }
+            to { width: 0%; }
+        }
+
         @media (max-width: 480px) {
             #container {
                 grid-template-columns: repeat(auto-fill, 34px);
@@ -155,12 +283,22 @@
                 height: 26px;
                 border-radius: 6px;
             }
+            .toast-container {
+                top: 1rem;
+                right: 1rem;
+                left: 1rem;
+            }
+            .toast {
+                min-width: unset;
+                max-width: 100%;
+            }
         }
     </style>
 </head>
 <body>
     <h1>1 Million Checkboxes</h1>
     <p class="subtitle">Click. Check. Conquer. ✨</p>
+    <div class="toast-container" id="toast-container"></div>
     <div id="container"></div>
     <script src="/socket.io/socket.io.js"></script>
     <script>
@@ -168,8 +306,32 @@
         const container = document.getElementById('container')
         const CHECKBOX_COUNT = 100
 
+        function showErrorToast(message) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.innerHTML = `
+                <span class="toast-icon">⚠</span>
+                <div class="toast-body">
+                    <span class="toast-title">Error</span>
+                    <span class="toast-message">${message}</span>
+                </div>
+                <button class="toast-close" onclick="dismissToast(this.parentElement)">✕</button>
+                <div class="toast-progress"></div>
+            `;
+            container.appendChild(toast);
+            setTimeout(() => dismissToast(toast), 5000);
+        }
+
+        function dismissToast(toast) {
+            if (!toast || toast.classList.contains('toast-exit')) return;
+            toast.classList.add('toast-exit');
+            toast.addEventListener('animationend', () => toast.remove());
+        }
+
         scoket.on('server:error', (data)=>{
             const errorMessage = data.error;
+            showErrorToast(errorMessage);
         })
         scoket.on('server:checkbox:change', (data)=>{
             console.log(`Socket server Event`, data);
@@ -181,7 +343,11 @@
             }
         });
 
-        window.addEventListener('load', async() => {
+        async function fetchStateFromServer() {
+            while(container.firstChild){
+                container.removeChild(container.firstChild)
+            }
+            
             const response = await fetch('/checkboxes', {method: 'GET'})
             const data = await response.json();
             if(data && data.checkboxes){
@@ -195,11 +361,16 @@
                     input.addEventListener('change', event =>{
                         const checked = event.target.checked
                         console.log('Checkbox chnages', {index, checked})
-                        scoket.emit('client:checkbox:change',{index, checked})
+                        scoket.emit('client:checkbox:change',{index, checked});
+                        fetchStateFromServer();
                     });
                     container.appendChild(input)
                 });
             }
+        }
+
+        window.addEventListener('load', async() => {
+          fetchStateFromServer();
         });
     </script>
 </body>
